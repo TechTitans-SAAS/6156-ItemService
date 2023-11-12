@@ -104,7 +104,7 @@ def update_item_by_id(item_id):
         updated_data = {}
         for key, value in request.form.items():
             # Ignore fields with empty values
-            if value:
+            if value and key != 'user_id':
                 updated_data[key] = value
         if 'image' in request.files:
             file_id = mongodb_client.save_file(request.files['image'].filename, request.files['image'])
