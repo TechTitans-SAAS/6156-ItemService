@@ -42,6 +42,23 @@ def get_item_by_id(item_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
+@app.route("/items/search", methods = ['GET'])
+def search_item_by_titel():
+    query = request.form.get('title')
+    try:
+        items = list(db.Items.find({"title":{'$regex' : '.*' + query + '.*'}}).sort("date_created", -1))
+        for item in items:
+            item["_id"] = str(item["_id"])
+        response_data = {"items": items}
+
+
+    # Return JSON response
+        response = make_response(jsonify(response_data))
+        response.headers["Content-Type"] = "application/json"
+        return response, 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
 
 @app.route("/items", methods = ['POST'])
 def create_item():
