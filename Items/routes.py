@@ -44,7 +44,7 @@ def get_item_by_id(item_id):
     
 @app.route("/items/search", methods = ['GET'])
 def search_item_by_titel():
-    query = request.form.get('title')
+    query = request.args.get('title')
     try:
         items = list(db.Items.find({"title":{'$regex' : '.*' + query + '.*'}}).sort("date_created", -1))
         for item in items:
