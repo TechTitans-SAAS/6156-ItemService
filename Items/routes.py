@@ -7,7 +7,7 @@ from Items import db
 from datetime import datetime
 ITEMS_PER_PAGE = 10
 
-# page should start from 0
+# page should start from 1
 @app.route("/items/<int:page>", methods = ['GET'])
 def get_items(page):
     skip = (page - 1) * ITEMS_PER_PAGE
