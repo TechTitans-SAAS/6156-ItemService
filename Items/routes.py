@@ -113,7 +113,7 @@ def delete_item(item_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route("/items/<string:item_id>", methods = ['PATCH'])
+@app.route("/items/<string:item_id>", methods = ['PUT'])
 def update_item_by_id(item_id):
     item_id_object = ObjectId(item_id)
     try:
