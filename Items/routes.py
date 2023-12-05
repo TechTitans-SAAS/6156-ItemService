@@ -7,6 +7,7 @@ from Items import db
 from datetime import datetime
 ITEMS_PER_PAGE = 10
 
+## TODO: need to check sign in for all requests
 # page should start from 1
 @app.route("/items/<int:page>", methods = ['GET'])
 def get_items(page):
@@ -70,7 +71,9 @@ def create_item():
         "description": request.form.get('description'),
         "price": request.form.get('price'),
         "user_id": request.form.get('user_id'),
-        "date_created": datetime.utcnow()
+        "date_created": datetime.utcnow(),
+        "buyer_email": None,
+        "rate": None
     }
 
     file = request.files['image']
@@ -121,7 +124,7 @@ def update_item_by_id(item_id):
         updated_data = {}
         for key, value in request.form.items():
             # Ignore fields with empty values
-            if value and key != 'user_id':
+            if value and key != 'user_id' and key != 'buyer_email':
                 updated_data[key] = value
         if 'image' in request.files:
             file_id = mongodb_client.save_file(request.files['image'].filename, request.files['image'])
@@ -140,5 +143,136 @@ def update_item_by_id(item_id):
             # Return response indicating no updates were made
             return jsonify({'message': 'No updates made'}), 200
         
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route("/items/<string:item_id>/mark_as_sold", methods = ['PUT'])
+def mark_item_as_sold(item_id):
+    ## TODO: Need to check this item belongs to this user
+    item_id_object = ObjectId(item_id)
+    buyer_email = request.form.get('buyer_email')
+    try:
+        # Retrieve updated data from the request form
+        updated_data = {}
+        updated_data["buyer_email"] = buyer_email
+
+        item = db.Items.update_one({"_id": item_id_object}, {'$set': updated_data})
+        if item.modified_count > 0:
+            # Fetch the updated document from the database
+            item = db.Items.find_one({'_id': ObjectId(item_id)})
+            item["_id"] = str(item["_id"])
+            response = make_response(jsonify(item))
+            response.headers["Content-Type"] = "application/json"
+            return response, 200
+        else:
+            # Return response indicating no updates were made
+            return jsonify({'message': 'No updates made'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route("/items/<string:item_id>/rate", methods = ['PUT'])
+def rate_item(item_id):
+    ## TODO: Need to check this item is bought by this user
+    item_id_object = ObjectId(item_id)
+    rate = int(request.form.get('rate'))
+    if not (rate >= 1 and rate <= 5):
+        return jsonify({'error': "The rate has to between 1 and 5."}), 500
+    try:
+        # Retrieve updated data from the request form
+        updated_data = {}
+        updated_data["rate"] = rate
+        item = db.Items.update_one({"_id": item_id_object, "buyer_email": {"$ne": None}}, {'$set': updated_data})
+        if item.modified_count > 0:
+            # Fetch the updated document from the database
+            item = db.Items.find_one({'_id': ObjectId(item_id)})
+            item["_id"] = str(item["_id"])
+            response = make_response(jsonify(item))
+            response.headers["Content-Type"] = "application/json"
+            return response, 200
+        else:
+            # Return response indicating no updates were made
+            return jsonify({'message': 'No updates made'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route("/avg_rate/<string:user_id>", methods = ['GET'])
+def get_avg_rate(user_id):
+    try:
+        items = list(db.Items.find({"user_id": user_id}).sort("date_created", -1))
+        rates = [item['rate'] for item in items if 'rate' in item and item['rate'] != None]
+        average_rate = sum(rates) / len(rates) if len(rates) > 0 else None
+        response = make_response(jsonify(average_rate))
+
+        return response, 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route("/myItem/<string:user_id>", methods = ['GET'])
+def get_my_items(user_id):
+    try:
+        items = list(db.Items.find({"user_id": user_id}).sort("date_created", -1))
+        for item in items:
+            item["_id"] = str(item["_id"])
+        response_data = {"items": items}
+
+    # Return JSON response
+        response = make_response(jsonify(response_data))
+        response.headers["Content-Type"] = "application/json"
+        return response, 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route("/myWishlist", methods = ['POST'])
+def add_to_my_wishlist():
+    response_data = {
+        "item_id": ObjectId(request.form.get('item_id')),
+        "user_id": request.form.get('user_id')
+    }
+    try:
+        result = db.Wishlist.insert_one(response_data)
+        print(result)
+        inserted_id = str(result.inserted_id)
+        response_data['_id'] = inserted_id
+        response_data['item_id'] = str(response_data['item_id'])
+
+        response = make_response(jsonify(response_data))
+        response.headers["Content-Type"] = "application/json"
+        return response, 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route("/myWishlist/<string:user_id>/<string:item_id>", methods = ['DELETE'])
+def remove_from_my_wishlist(user_id, item_id):
+    try:
+        item = db.Wishlist.find_one_and_delete({"user_id": user_id, "item_id": ObjectId(item_id)})
+        if item is None:
+            return "Item does not exist", 404
+        item["item_id"] = str(item["item_id"])
+        item["_id"] = str(item["_id"])
+
+
+    # Return JSON response
+        response = make_response(jsonify(item))
+        response.headers["Content-Type"] = "application/json"
+        return response, 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+@app.route("/myWishlist/<string:user_id>", methods = ['GET'])
+def get_my_wishlist(user_id):
+    try:
+        item_ids = list(map(lambda x: x["item_id"], list(db.Wishlist.find({"user_id": user_id}, {"item_id":1, "_id":0}).sort("date_created", -1))))
+        items = list(db.Items.find({"_id": {"$in": item_ids}}))
+        for item in items:
+            item["_id"] = str(item["_id"])
+        response_data = {"items": items}
+
+    # Return JSON response
+        response = make_response(jsonify(response_data))
+        response.headers["Content-Type"] = "application/json"
+        return response, 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
