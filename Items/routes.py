@@ -8,7 +8,7 @@ from datetime import datetime
 ITEMS_PER_PAGE = 10
 
 ## TODO: need to check sign in for all requests
-# page should start from 1
+# pages should start from 1
 @app.route("/items/<int:page>", methods = ['GET'])
 def get_items(page):
     skip = (page - 1) * ITEMS_PER_PAGE
