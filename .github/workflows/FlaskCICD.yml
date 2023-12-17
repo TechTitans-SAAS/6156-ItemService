@@ -53,11 +53,12 @@ jobs:
             
             - name: Stop Previous App
               run: |
-                PID=`pgrep -f "python app.py"`
-    
-                if [ -n "\$PID" ]; then
-                  echo "Killing process with PID \$PID"
-                  kill \$PID
+                PID=$(pgrep -f "python app.py")
+
+                if [ -n "$PID" ]; then
+                  echo "Killing previous process with PID $PID"
+                  kill $PID
+                fi
         
             - name: Start New App
               run: |
