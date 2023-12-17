@@ -58,6 +58,8 @@ jobs:
                 if [ -n "$PID" ]; then
                   echo "Killing previous process with PID $PID"
                   kill $PID
+                else
+                  echo "No previous process"
                 fi
         
             - name: Start New App
