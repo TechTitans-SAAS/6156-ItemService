@@ -53,9 +53,14 @@ jobs:
             
             - name: Stop Previous App
               run: |
-                # Replace "your-app" with the actual name or identifier of your app
-                pkill -f "python app.py" || true
+                # Find the process ID (PID) of the running Python process
+                PID=\$(pgrep -f "python app.py")
+    
+                # If PID is not empty, kill the process
+                if [ -n "\$PID" ]; then
+                  echo "Killing process with PID \$PID"
+                  kill \$PID
         
             - name: Start New App
               run: |
-                nohup python app.py
+                nohup python app.py &
