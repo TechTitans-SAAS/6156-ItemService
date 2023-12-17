@@ -53,6 +53,7 @@ jobs:
             
             - name: Stop Previous App
               run: |
+                echo "before"
                 PID=$(pgrep -f "python app.py" | grep -E "^\s*[0-9]+\s+python app.py$")
 
                 echo "Process IDs found: $PID"
