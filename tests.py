@@ -8,7 +8,7 @@ class TestViews(unittest.TestCase):
         self.app = app.test_client()
         self.app.testing = True
 
-
+    # here is a test case
     def test_get_items(self):
         response = self.app.get('/items/1')
         self.assertEqual(response.status_code, 200)
