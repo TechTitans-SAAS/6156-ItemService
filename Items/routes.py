@@ -1,6 +1,6 @@
 from Items import app, mongodb_client
 from flask import jsonify, make_response, render_template, request, redirect, flash, url_for
-
+import base64
 from bson import ObjectId
 
 from Items import db
@@ -16,6 +16,18 @@ def get_items(page):
         items = list(db.Items.find({}).sort("date_created", -1).skip(skip).limit(ITEMS_PER_PAGE))
         for item in items:
             item["_id"] = str(item["_id"])
+            file_id = ObjectId(item.get('image', None))
+            
+            if file_id:
+                try:
+                    # Retrieve image data from GridFS
+                    file_data = db.fs.files.find_one({'_id': file_id})
+                    image_data = db.fs.chunks.find_one({'files_id': file_id})
+                    if file_data and image_data:
+                        item['imageData'] = base64.b64encode(image_data['data']).decode('utf-8')  # Include image data in the item
+                        print(item['imageData'])
+                except Exception as e:
+                    print(f"Error retrieving image data: {str(e)}")
         response_data = {"items": items}
 
     # Return JSON response
