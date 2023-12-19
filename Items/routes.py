@@ -25,7 +25,6 @@ def get_items(page):
                     image_data = db.fs.chunks.find_one({'files_id': file_id})
                     if file_data and image_data:
                         item['imageData'] = base64.b64encode(image_data['data']).decode('utf-8')  # Include image data in the item
-                        print(item['imageData'])
                 except Exception as e:
                     print(f"Error retrieving image data: {str(e)}")
         response_data = {"items": items}
