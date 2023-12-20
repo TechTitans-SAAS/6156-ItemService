@@ -45,6 +45,16 @@ def get_item_by_id(item_id):
         if item is None:
             return "Item does not exist", 404
         item["_id"] = str(item["_id"])
+        file_id = ObjectId(item.get('image', None)) 
+        if file_id:
+            try:
+                # Retrieve image data from GridFS
+                file_data = db.fs.files.find_one({'_id': file_id})
+                image_data = db.fs.chunks.find_one({'files_id': file_id})
+                if file_data and image_data:
+                    item['imageData'] = base64.b64encode(image_data['data']).decode('utf-8')  # Include image data in the item
+            except Exception as e:
+                print(f"Error retrieving image data: {str(e)}")
 
 
     # Return JSON response
@@ -61,6 +71,16 @@ def search_item_by_titel():
         items = list(db.Items.find({"title":{'$regex' : '.*' + query + '.*'}}).sort("date_created", -1))
         for item in items:
             item["_id"] = str(item["_id"])
+            file_id = ObjectId(item.get('image', None))  
+            if file_id:
+                try:
+                    # Retrieve image data from GridFS
+                    file_data = db.fs.files.find_one({'_id': file_id})
+                    image_data = db.fs.chunks.find_one({'files_id': file_id})
+                    if file_data and image_data:
+                        item['imageData'] = base64.b64encode(image_data['data']).decode('utf-8')  # Include image data in the item
+                except Exception as e:
+                    print(f"Error retrieving image data: {str(e)}")
         response_data = {"items": items}
 
 
