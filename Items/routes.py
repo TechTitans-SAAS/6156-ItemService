@@ -20,17 +20,13 @@ def verify_token(token):
     public_keys = response.json()
     try:
         # Verify the JWT token using the fetched public keys
-        print(token)
-        #print(jwt.decode(token, certs=public_keys, audience=audience))
         decoded_token = jwt.decode(token, certs=public_keys, audience=audience)
-        print(decoded_token)
         # The token is verified, and 'decoded_token' contains the decoded information
         return decoded_token
     except Exception as e:
         print(f"Error in decoding token: {str(e)}")
         return None
 
-## TODO: need to check sign in for all requests
 # pages should start from 1
 @app.route("/items/<int:page>", methods = ['GET'])
 def get_items(page):
