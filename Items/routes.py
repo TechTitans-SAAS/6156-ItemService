@@ -2,10 +2,33 @@ from Items import app, mongodb_client
 from flask import jsonify, make_response, render_template, request, redirect, flash, url_for
 import base64
 from bson import ObjectId
-
+import google.auth.crypt
+import time
+import requests
+from google.auth import jwt
 from Items import db
 from datetime import datetime
 ITEMS_PER_PAGE = 10
+
+def verify_token(token):
+    audience = "https://thriftustore-api-2ubvdk157ecvh.apigateway.user-microservice-402518.cloud.goog"
+    # Public key URL for the service account
+    public_key_url = 'https://www.googleapis.com/robot/v1/metadata/x509/jwt-182@user-microservice-402518.iam.gserviceaccount.com'
+    
+    # Fetch the public keys from the URL
+    response = requests.get(public_key_url)
+    public_keys = response.json()
+    try:
+        # Verify the JWT token using the fetched public keys
+        print(token)
+        #print(jwt.decode(token, certs=public_keys, audience=audience))
+        decoded_token = jwt.decode(token, certs=public_keys, audience=audience)
+        print(decoded_token)
+        # The token is verified, and 'decoded_token' contains the decoded information
+        return decoded_token
+    except Exception as e:
+        print(f"Error in decoding token: {str(e)}")
+        return None
 
 ## TODO: need to check sign in for all requests
 # pages should start from 1
@@ -94,6 +117,13 @@ def search_item_by_titel():
 
 @app.route("/items", methods = ['POST'])
 def create_item():
+    if 'Authorization' not in request.headers: return "Unauthorized user", 401
+
+    token = request.headers.get('Authorization').split()[1]
+    print(verify_token(token))
+    if (verify_token(token)) is None:
+        return "Unauthorized user", 401
+
     if 'image' not in request.files:
         return jsonify({'error': 'No file part'}), 400
 
@@ -101,7 +131,8 @@ def create_item():
         "title": request.form.get('title'),
         "description": request.form.get('description'),
         "price": request.form.get('price'),
-        "user_id": request.form.get('user_id'),
+        #"user_id": request.form.get('user_id'),
+        "user_id": str(verify_token(token)['id']),
         "date_created": datetime.utcnow(),
         "buyer_email": None,
         "rate": None
@@ -132,8 +163,13 @@ def create_item():
 
 @app.route("/items/<string:item_id>", methods = ['DELETE'])
 def delete_item(item_id):
+    if 'Authorization' not in request.headers: return "Unauthorized user", 401
+    token = request.headers.get('Authorization').split()[1]
+    if (verify_token(token)) is None:
+        return "Unauthorized user", 401
+
     try:
-        item = db.Items.find_one_and_delete({"_id": ObjectId(item_id)})
+        item = db.Items.find_one_and_delete({"_id": ObjectId(item_id), "user_id": str(verify_token(token)['id'])})
         if item is None:
             return "Item does not exist", 404
         item["_id"] = str(item["_id"])
@@ -149,6 +185,11 @@ def delete_item(item_id):
 
 @app.route("/items/<string:item_id>", methods = ['PUT'])
 def update_item_by_id(item_id):
+    if 'Authorization' not in request.headers: return "Unauthorized user", 401
+    token = request.headers.get('Authorization').split()[1]
+    if (verify_token(token)) is None:
+        return "Unauthorized user", 401
+
     item_id_object = ObjectId(item_id)
     try:
         # Retrieve updated data from the request form
@@ -162,7 +203,7 @@ def update_item_by_id(item_id):
             updated_data['image'] = str(file_id)
 
 
-        item = db.Items.update_one({"_id": item_id_object}, {'$set': updated_data})
+        item = db.Items.update_one({"_id": item_id_object, "user_id": str(verify_token(token)['id'])}, {'$set': updated_data})
         if item.modified_count > 0:
             # Fetch the updated document from the database
             item = db.Items.find_one({'_id': ObjectId(item_id)})
@@ -179,7 +220,11 @@ def update_item_by_id(item_id):
     
 @app.route("/items/<string:item_id>/mark_as_sold", methods = ['PUT'])
 def mark_item_as_sold(item_id):
-    ## TODO: Need to check this item belongs to this user
+    if 'Authorization' not in request.headers: return "Unauthorized user", 401
+    token = request.headers.get('Authorization').split()[1]
+    if (verify_token(token)) is None:
+        return "Unauthorized user", 401
+
     item_id_object = ObjectId(item_id)
     buyer_email = request.form.get('buyer_email')
     try:
@@ -187,7 +232,7 @@ def mark_item_as_sold(item_id):
         updated_data = {}
         updated_data["buyer_email"] = buyer_email
 
-        item = db.Items.update_one({"_id": item_id_object}, {'$set': updated_data})
+        item = db.Items.update_one({"_id": item_id_object, "user_id": str(verify_token(token)['id'])}, {'$set': updated_data})
         if item.modified_count > 0:
             # Fetch the updated document from the database
             item = db.Items.find_one({'_id': ObjectId(item_id)})
@@ -204,7 +249,11 @@ def mark_item_as_sold(item_id):
     
 @app.route("/items/<string:item_id>/rate", methods = ['PUT'])
 def rate_item(item_id):
-    ## TODO: Need to check this item is bought by this user
+    if 'Authorization' not in request.headers: return "Unauthorized user", 401
+    token = request.headers.get('Authorization').split()[1]
+    if (verify_token(token)) is None:
+        return "Unauthorized user", 401
+
     item_id_object = ObjectId(item_id)
     rate = int(request.form.get('rate'))
     if not (rate >= 1 and rate <= 5):
@@ -213,7 +262,7 @@ def rate_item(item_id):
         # Retrieve updated data from the request form
         updated_data = {}
         updated_data["rate"] = rate
-        item = db.Items.update_one({"_id": item_id_object, "buyer_email": {"$ne": None}}, {'$set': updated_data})
+        item = db.Items.update_one({"_id": item_id_object, "buyer_email": verify_token(token)['email']}, {'$set': updated_data})
         if item.modified_count > 0:
             # Fetch the updated document from the database
             item = db.Items.find_one({'_id': ObjectId(item_id)})
@@ -240,10 +289,15 @@ def get_avg_rate(user_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route("/myItem/<string:user_id>", methods = ['GET'])
-def get_my_items(user_id):
+@app.route("/myItem", methods = ['GET'])
+def get_my_items():
+    if 'Authorization' not in request.headers: return "Unauthorized user", 401
+    token = request.headers.get('Authorization').split()[1]
+    if (verify_token(token)) is None:
+        return "Unauthorized user", 401
+
     try:
-        items = list(db.Items.find({"user_id": user_id}).sort("date_created", -1))
+        items = list(db.Items.find({"user_id": str(verify_token(token)['id'])}).sort("date_created", -1))
         for item in items:
             item["_id"] = str(item["_id"])
         response_data = {"items": items}
@@ -257,9 +311,14 @@ def get_my_items(user_id):
 
 @app.route("/myWishlist", methods = ['POST'])
 def add_to_my_wishlist():
+    if 'Authorization' not in request.headers: return "Unauthorized user", 401
+    token = request.headers.get('Authorization').split()[1]
+    if (verify_token(token)) is None:
+        return "Unauthorized user", 401
+
     response_data = {
         "item_id": ObjectId(request.form.get('item_id')),
-        "user_id": request.form.get('user_id')
+        "user_id": str(verify_token(token)['id'])
     }
     try:
         result = db.Wishlist.insert_one(response_data)
@@ -274,10 +333,15 @@ def add_to_my_wishlist():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
-@app.route("/myWishlist/<string:user_id>/<string:item_id>", methods = ['DELETE'])
-def remove_from_my_wishlist(user_id, item_id):
+@app.route("/myWishlist/<string:item_id>", methods = ['DELETE'])
+def remove_from_my_wishlist(item_id):
+    if 'Authorization' not in request.headers: return "Unauthorized user", 401
+    token = request.headers.get('Authorization').split()[1]
+    if (verify_token(token)) is None:
+        return "Unauthorized user", 401
+
     try:
-        item = db.Wishlist.find_one_and_delete({"user_id": user_id, "item_id": ObjectId(item_id)})
+        item = db.Wishlist.find_one_and_delete({"user_id": str(verify_token(token)['id']), "item_id": ObjectId(item_id)})
         if item is None:
             return "Item does not exist", 404
         item["item_id"] = str(item["item_id"])
@@ -292,10 +356,15 @@ def remove_from_my_wishlist(user_id, item_id):
         return jsonify({'error': str(e)}), 500
     
 
-@app.route("/myWishlist/<string:user_id>", methods = ['GET'])
-def get_my_wishlist(user_id):
+@app.route("/myWishlist", methods = ['GET'])
+def get_my_wishlist():
+    if 'Authorization' not in request.headers: return "Unauthorized user", 401
+    token = request.headers.get('Authorization').split()[1]
+    if (verify_token(token)) is None:
+        return "Unauthorized user", 401
+
     try:
-        item_ids = list(map(lambda x: x["item_id"], list(db.Wishlist.find({"user_id": user_id}, {"item_id":1, "_id":0}).sort("date_created", -1))))
+        item_ids = list(map(lambda x: x["item_id"], list(db.Wishlist.find({"user_id": str(verify_token(token)['id'])}, {"item_id":1, "_id":0}).sort("date_created", -1))))
         items = list(db.Items.find({"_id": {"$in": item_ids}}))
         for item in items:
             item["_id"] = str(item["_id"])
