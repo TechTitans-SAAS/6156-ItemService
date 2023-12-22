@@ -8,6 +8,7 @@ import requests
 from google.auth import jwt
 from Items import db
 from datetime import datetime
+import math
 ITEMS_PER_PAGE = 10
 
 def verify_token(token):
@@ -26,6 +27,20 @@ def verify_token(token):
     except Exception as e:
         print(f"Error in decoding token: {str(e)}")
         return None
+
+@app.route("/items/page", methods = ['GET'])
+def get_page():
+    try:
+        total_items = db.Items.count_documents({})
+        page = math.ceil(total_items / ITEMS_PER_PAGE);
+        response_data = {"page": page}
+
+    # Return JSON response
+        response = make_response(jsonify(response_data))
+        response.headers["Content-Type"] = "application/json"
+        return response, 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # pages should start from 1
 @app.route("/items/<int:page>", methods = ['GET'])
